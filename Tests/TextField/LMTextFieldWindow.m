@@ -22,7 +22,7 @@
 
 #pragma mark - LMTextFieldDelegate
 
-- (BOOL)textField:(LMTextField *)textField fieldEditor:(LMTextView*)textView mouseDownForTokenAtRange:(NSRange)range withBounds:(NSRect)bounds keyPath:(NSArray *)keyPath
+- (void)textField:(LMTextField *)textField fieldEditor:(LMTextView*)textView mouseDownForTokenAtRange:(NSRange)range withBounds:(NSRect)bounds keyPath:(NSArray *)keyPath
 {
 	NSTextAttachment* textAttachment = [LMTokenAttachmentCell tokenAttachmentWithString:[keyPath keyPathDescription]];
 	
@@ -31,8 +31,6 @@
 		[textView.textStorage replaceCharactersInRange:range withAttributedString:attributedString];
 		[textView didChangeText];
 	}
-	
-	return YES;
 }
 
 - (NSArray *)textField:(LMTextField *)textField fieldEditor:(LMTextView *)fieldEditor completions:(NSArray *)words forPartialWordRange:(NSRange)charRange indexOfSelectedItem:(NSInteger *)index

@@ -18,8 +18,6 @@ NSString* LMTextFieldAttributedStringValueBinding = @"attributedStringValue";
 @interface LMTextField ()
 
 @property (strong, nonatomic, readwrite) NSMutableArray* textAttachmentCellClasses;
-@property (nonatomic, readwrite) BOOL hasChanges;
-@property (nonatomic, readwrite) BOOL hasNotPropagatedChanges;
 
 @end
 
@@ -28,8 +26,6 @@ NSString* LMTextFieldAttributedStringValueBinding = @"attributedStringValue";
 - (void)_setup
 {
 	self.useTemporaryAttributesForSyntaxHighlight = NO; // This is different default than LMTextView
-	self.hasChanges = NO;
-	self.hasNotPropagatedChanges = NO;
 	
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(frameDidChange:) name:NSViewFrameDidChangeNotification object:self];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(boundsDidChange:) name:NSViewBoundsDidChangeNotification object:self];
@@ -122,35 +118,25 @@ NSString* LMTextFieldAttributedStringValueBinding = @"attributedStringValue";
 - (NSSize)intrinsicContentSize
 {
     if (![self.cell wraps]) {
-		_LMTextViewDrawingInControlView = self;
-        NSSize cs = [super intrinsicContentSize];
-		_LMTextViewDrawingInControlView = nil;
-//@TODO: This is a hack, needs to be fixed
-		// The problem here, is that [super intrinsicContentSize] returns a
-		// value of 21.f when it has only a Token (Paw's Dynamic Values) inside
-		cs.height = MAX(cs.height, 22.f);
-		return cs;
+        return [super intrinsicContentSize];
     }
 	
     NSRect frame = [self frame];
 	
     CGFloat width = frame.size.width;
 	
-    // Make the height practically infinite, while keeping the width
+    // Make the frame very high, while keeping the width
     frame.size.height = CGFLOAT_MAX;
 	
     // Calculate new height within the frame
-    CGFloat height;
+    // with practically infinite height.
+    CGFloat height = [self.cell cellSizeForBounds: frame].height;
+	
 	if ([self currentEditor] && [[[self currentEditor] class] isSubclassOfClass:[NSTextView class]]) {
 		
 		// Thanks to: https://github.com/DouglasHeriot/AutoGrowingNSTextField/blob/master/autoGrowingExample/TSTTextGrowth.m
 		NSRect usedRect = [[[(NSTextView*)[self currentEditor] textContainer] layoutManager] usedRectForTextContainer:[(NSTextView*)[self currentEditor] textContainer]];
 		height = usedRect.size.height + 5;
-	}
-	else {
-		_LMTextViewDrawingInControlView = self;
-		height = [self.cell cellSizeForBounds: frame].height;
-		_LMTextViewDrawingInControlView = nil;
 	}
 	
 	return NSMakeSize(width, height);
@@ -167,20 +153,11 @@ NSString* LMTextFieldAttributedStringValueBinding = @"attributedStringValue";
 	[[self currentEditor] setRichText:[self isRichText]];
 	
 	if ([[[self currentEditor] class] isSubclassOfClass:[LMTextView class]]) {
-		
-		[(LMTextView*)[self currentEditor] setUseTemporaryAttributesForSyntaxHighlight:self.useTemporaryAttributesForSyntaxHighlight];
-		
-		// Enforce font (must be called before parser and highlighting)
-		NSTextStorage* textStorage = [(LMTextView*)[self currentEditor] textStorage];
-		[textStorage addAttributes:[self textAttributes] range:NSMakeRange(0, [textStorage length])];
-		
-//		Not sure yet if it's useful (debug VERY carefully)
-//		[(LMTextView*)[self currentEditor] setFont:[self font]];
-//		[(LMTextView*)[self currentEditor] setTextColor:[self textColor]];
-		
 		[(LMTextView*)[self currentEditor] setParser:[self parser]];
 		
 		[(LMTextView*)[self currentEditor] highlightSyntax:nil];
+		
+		[(LMTextView*)[self currentEditor] setUseTemporaryAttributesForSyntaxHighlight:self.useTemporaryAttributesForSyntaxHighlight];
 		
 		[[(LMTextView*)[self currentEditor] textAttachmentCellClasses] setArray:[self textAttachmentCellClasses]];
 		
@@ -192,31 +169,15 @@ NSString* LMTextFieldAttributedStringValueBinding = @"attributedStringValue";
 
 #pragma mark - NSTextDelegate
 
-- (void)textDidBeginEditing:(NSNotification *)notification
-{
-	if (notification.object == [self currentEditor]) {
-		self.hasChanges = NO;
-		self.hasNotPropagatedChanges = NO;
-		[super textDidBeginEditing:notification];
-	}
-}
-
 - (void)textDidChange:(NSNotification *)notification
 {
 	if (notification.object == [self currentEditor]) {
 		
-		self.hasChanges = YES;
-		self.hasNotPropagatedChanges = YES;
-		
-//@TODO: Fix the shouldUpdateContinuouslyBinding for LMTextFieldAttributedStringValueBinding
+#warning Fix the shouldUpdateContinuouslyBinding for LMTextFieldAttributedStringValueBinding
 		if ([self shouldUpdateContinuouslyBinding:LMTextFieldAttributedStringValueBinding]) {
 			
 		}
-		
-		if ([self isEditable]) {
-			[self propagateValue:[[(LMTextView*)[self currentEditor] textStorage] copy] forBinding:LMTextFieldAttributedStringValueBinding];
-			self.hasNotPropagatedChanges = NO;
-		}
+		[self propagateValue:[[(LMTextView*)[self currentEditor] textStorage] copy] forBinding:LMTextFieldAttributedStringValueBinding];
 		
 		[super textDidChange:notification];
 		
@@ -230,18 +191,13 @@ NSString* LMTextFieldAttributedStringValueBinding = @"attributedStringValue";
 - (void)textDidEndEditing:(NSNotification *)notification
 {
 	if (notification.object == [self currentEditor]) {
-		if (self.hasNotPropagatedChanges && [self isEditable]) {
-			[self propagateValue:[[(LMTextView*)[self currentEditor] textStorage] copy] forBinding:LMTextFieldAttributedStringValueBinding];
-			self.hasNotPropagatedChanges = NO;
-		}
+		[self propagateValue:[[(LMTextView*)[self currentEditor] textStorage] copy] forBinding:LMTextFieldAttributedStringValueBinding];
 		
 		[super textDidEndEditing:notification];
 		
 		[self setAttributedStringValue:[self attributedStringValue]];
 		
 		[self invalidateIntrinsicContentSize];
-		
-		self.hasChanges = NO;
 	}
 }
 
@@ -268,14 +224,13 @@ NSString* LMTextFieldAttributedStringValueBinding = @"attributedStringValue";
 
 #pragma mark - LMTextViewDelegate
 
-- (BOOL)textView:(LMTextView *)textView mouseDownForTokenAtRange:(NSRange)range withBounds:(NSRect)bounds keyPath:(NSArray *)keyPath
+- (void)textView:(LMTextView *)textView mouseDownForTokenAtRange:(NSRange)range withBounds:(NSRect)bounds keyPath:(NSArray *)keyPath
 {
 	if (textView == [self currentEditor]) {
 		if ([self.delegate respondsToSelector:@selector(textField:fieldEditor:mouseDownForTokenAtRange:withBounds:keyPath:)]) {
-			return [(id<LMTextFieldDelegate>)self.delegate textField:self fieldEditor:textView mouseDownForTokenAtRange:range withBounds:bounds keyPath:keyPath];
+			[(id<LMTextFieldDelegate>)self.delegate textField:self fieldEditor:textView mouseDownForTokenAtRange:range withBounds:bounds keyPath:keyPath];
 		}
 	}
-	return NO;
 }
 
 - (NSArray *)textView:(NSTextView *)textView completions:(NSArray *)words forPartialWordRange:(NSRange)charRange indexOfSelectedItem:(NSInteger *)index

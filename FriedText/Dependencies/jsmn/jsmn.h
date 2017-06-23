@@ -1,11 +1,8 @@
 #ifndef __JSMN_H_
 #define __JSMN_H_
 
-#import <CoreFoundation/CoreFoundation.h>
-
-#define JSMN_PARENT_LINKS
-#define JSMN_POSITION_INSIDE_PARENT
-#define JSMN_STRICT
+#define JSMN_PARENT_LINKS 1
+#define JSMN_POSITION_INSIDE_PARENT 1
 
 /**
  * JSON type identifier. Basic types are:
@@ -70,7 +67,7 @@ void jsmn_init(jsmn_parser *parser);
  * Run JSON parser. It parses a JSON data string into and array of tokens, each describing
  * a single JSON object.
  */
-jsmnerr_t jsmn_parse(jsmn_parser *parser, CFStringRef js,
+jsmnerr_t jsmn_parse(jsmn_parser *parser, const char *js, 
 		jsmntok_t *tokens, unsigned int num_tokens);
 
 #endif /* __JSMN_H_ */

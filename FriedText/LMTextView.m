@@ -28,13 +28,7 @@
 #import "NSString+LMCompletionOption.h"
 #import "LMCompletionView.h"
 
-NSView* _LMTextViewDrawingInControlView = nil;
-
-//#define LMTextViewEnableCompletionTemporaryInsertion
-
 #define NSLog(...)
-#define LMTextViewCompletionLog(...)
-//#define LMTextViewCompletionLog NSLog
 
 /* Pasteboard Constant Values:
  * NSPasteboardTypeRTFD: com.apple.flat-rtfd
@@ -42,7 +36,7 @@ NSView* _LMTextViewDrawingInControlView = nil;
  * NSRTFDPboardType: NeXT RTFD pasteboard type
  */
 
-//@TODO: Make a smart system to force users to allow rich text if using tokens, while blocking rich text input if needed
+#warning Make a smart system to force users to allow rich text if using tokens, while blocking rich text input if needed
 
 typedef enum {
 	LMCompletionEventTextDidChange,
@@ -55,9 +49,7 @@ typedef enum {
 @interface LMTextView () <LMCompletionViewDelegate> {
 	NSRect _oldBounds;
 	NSRange _completionRange;
-#ifdef LMTextViewEnableCompletionTemporaryInsertion
 	NSMutableAttributedString* _originalStringBeforeCompletion;
-#endif
 	id _insertedString;
 	BOOL _handlingCompletion;
 	LMCompletionView* _completionView;
@@ -80,7 +72,7 @@ typedef enum {
 {
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(textDidChange:) name:NSTextDidChangeNotification object:self];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(boundsDidChange:) name:NSViewBoundsDidChangeNotification object:self.enclosingScrollView.contentView];
-	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(textStorageDidProcessEditing:) name:NSTextStorageDidProcessEditingNotification object:self.textStorage];
+	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(textStorageDidProcessEditing:) name:NSTextStorageDidProcessEditingNotification object:self.enclosingScrollView.contentView];
 	
 	NSColor* baseColor = [NSColor colorWithCalibratedRed:93.f/255.f green:72.f/255.f blue:55.f/255.f alpha:1.f];
 	[self setTextColor:baseColor];
@@ -88,12 +80,10 @@ typedef enum {
 	self.useTemporaryAttributesForSyntaxHighlight = YES;
 	
 	_completionRange.location = NSNotFound;
-#ifdef LMTextViewEnableCompletionTemporaryInsertion
 	_originalStringBeforeCompletion = nil;
-#endif
 	_insertedString = nil;
 	_handlingCompletion = NO;
-	_underlineTokensOnMouseOver = YES;
+    _enableAutocompletion= YES;
 }
 
 - (id)initWithCoder:(NSCoder *)aDecoder
@@ -125,7 +115,7 @@ typedef enum {
 {
 	return @{
 		  NSFontAttributeName:[self font] ?: [NSFont systemFontOfSize:[NSFont systemFontSize]],
-		  NSForegroundColorAttributeName:[self textColor] ?: [NSColor blackColor],
+	NSForegroundColorAttributeName:[self textColor] ?: [NSColor blackColor],
 	};
 }
 
@@ -138,7 +128,7 @@ typedef enum {
 	}
 	
 	if (shouldSet) {
-		[self setString:string?:@""];
+		[self setString:string];
 		[self didChangeText];
 	}
 	
@@ -194,25 +184,8 @@ typedef enum {
 // Always called before textDidChange:
 - (void)textStorageDidProcessEditing:(NSNotification*)notification
 {
-	NSLog(@"textStorageDidProcessEditing:");
-	
+//	NSLog(@"textStorageDidProcessEditing:");
 	[self.parser invalidateString];
-	
-	// If Field Editor, enforce field's attributes
-	if ([self isFieldEditor] && [self.delegate isKindOfClass:[LMTextField class]]) {
-		LMTextField* textField = (LMTextField*)[self delegate];
-		NSTextStorage* textStorage = [self textStorage];
-		[textStorage addAttributes:[textField textAttributes] range:NSMakeRange(0, [textStorage length])];
-		[textStorage fixAttributesInRange:NSMakeRange(0, [textStorage length])];
-		if ([self parser]) { // We should highlight only if there is a parser, or it will erase attributes
-			[self highlightSyntax:nil];
-		}
-	}
-	else if ([self enforceTextAttributes] != nil) {
-		NSTextStorage* textStorage = [self textStorage];
-		[textStorage addAttributes:[self enforceTextAttributes] range:NSMakeRange(0, [textStorage length])];
-		[textStorage fixAttributesInRange:NSMakeRange(0, [textStorage length])];
-	}
 }
 
 - (void)boundsDidChange:(NSNotification*)notification
@@ -233,7 +206,7 @@ typedef enum {
 
 - (void)textDidChange:(NSNotification *)notification
 {
-	NSLog(@"textDidChange:");
+//	NSLog(@"textDidChange:");
 	
 	// Syntax Highlighting
 	if (_optimizeHighlightingOnEditing) {
@@ -425,9 +398,7 @@ typedef enum {
 			NSRange tokenRange;
 			[self.parser keyPathForObjectAtRange:NSMakeRange(charIndex, 1) objectRange:&tokenRange];
 			if (tokenRange.location != NSNotFound) {
-				if (_underlineTokensOnMouseOver) {
-					[layoutManager addTemporaryAttribute:NSUnderlineStyleAttributeName value:@(NSUnderlinePatternDot | NSUnderlineStyleSingle) forCharacterRange:tokenRange];
-				}
+				[layoutManager addTemporaryAttribute:NSUnderlineStyleAttributeName value:@(NSUnderlinePatternDot | NSUnderlineStyleSingle) forCharacterRange:tokenRange];
 				
 				needsCursor = YES;
 			}
@@ -450,7 +421,6 @@ typedef enum {
 	NSTextContainer *textContainer = [self textContainer];
 	NSUInteger charIndex = [self charIndexForPoint:[self convertPoint:[theEvent locationInWindow] fromView:nil]];
 	NSRange tokenRange = NSMakeRange(NSNotFound, 0);
-	BOOL foundToken = NO;
     if (charIndex != NSNotFound) {
 		if ([[self.textStorage string] characterAtIndex:charIndex] == 0xFFFC) {
 			
@@ -460,20 +430,16 @@ typedef enum {
 			NSRect bounds = [layoutManager boundingRectForGlyphRange:tokenRange inTextContainer:textContainer];
 			
 			if (tokenRange.location != NSNotFound) {
-				foundToken = YES;
 				if ([self.delegate respondsToSelector:@selector(textView:mouseDownForTokenAtRange:withBounds:keyPath:)]) {
-					if ([(id<LMTextViewDelegate>)self.delegate textView:self mouseDownForTokenAtRange:tokenRange withBounds:bounds keyPath:path]) {
-						return;
-					}
+					[(id<LMTextViewDelegate>)self.delegate textView:self mouseDownForTokenAtRange:tokenRange withBounds:bounds keyPath:path];
 				}
+				return;
 			}
 		}
     }
 	
-	if (!foundToken) {
-		if ([self.delegate respondsToSelector:@selector(mouseDownOutsideTokenInTextView:)]) {
-			[(id<LMTextViewDelegate>)self.delegate mouseDownOutsideTokenInTextView:self];
-		}
+	if ([self.delegate respondsToSelector:@selector(mouseDownOutsideTokenInTextView:)]) {
+		[(id<LMTextViewDelegate>)self.delegate mouseDownOutsideTokenInTextView:self];
 	}
 	
 	[super mouseDown:theEvent];
@@ -512,77 +478,59 @@ typedef enum {
 	// Store whether we can use the delegate to get the attribtues
 	BOOL usingDelegate = [self.delegate respondsToSelector:@selector(textView:attributesForTextWithParser:tokenMask:atRange:)];
 	
-	id <LMTextParser> parser = [self parser];
-	
-	if (parser) {
-		[parser applyAttributesInRange:characterRange withBlock:^(NSUInteger tokenTypeMask, NSRange range) {
-			
-			NSDictionary* attributes = nil;
-			
-			// Trying to get attribtues from delegate
-			if (usingDelegate) {
-				attributes = [(id<LMTextViewDelegate>)self.delegate textView:self attributesForTextWithParser:[self parser] tokenMask:tokenTypeMask atRange:range];
+	[[self parser] applyAttributesInRange:characterRange withBlock:^(NSUInteger tokenTypeMask, NSRange range) {
+		
+		NSDictionary* attributes = nil;
+		
+		// Trying to get attribtues from delegate
+		if (usingDelegate) {
+			attributes = [(id<LMTextViewDelegate>)self.delegate textView:self attributesForTextWithParser:[self parser] tokenMask:tokenTypeMask atRange:range];
+		}
+		
+		// If delegate wasn't implemented or returned nil, set default attributes
+		if (attributes == nil) {
+			NSColor* color = nil;
+			switch (tokenTypeMask & LMTextParserTokenTypeMask) {
+				case LMTextParserTokenTypeBoolean:
+					color = LMFriedTextDefaultColorPrimitive;
+					break;
+				case LMTextParserTokenTypeNumber:
+					color = LMFriedTextDefaultColorPrimitive;
+					break;
+				case LMTextParserTokenTypeString:
+					color = LMFriedTextDefaultColorString;
+					break;
+				case LMTextParserTokenTypeOther:
+					color = LMFriedTextDefaultColorPrimitive;
+					break;
 			}
-			
-			// If delegate wasn't implemented or returned nil, set default attributes
-			if (attributes == nil) {
-				NSColor* color = nil;
-				switch (tokenTypeMask & LMTextParserTokenTypeMask) {
-					case LMTextParserTokenTypeBoolean:
-						color = LMFriedTextDefaultColorPrimitive;
-						break;
-					case LMTextParserTokenTypeNumber:
-						color = LMFriedTextDefaultColorPrimitive;
-						break;
-					case LMTextParserTokenTypeString:
-						color = LMFriedTextDefaultColorString;
-						break;
-					case LMTextParserTokenTypeOther:
-						color = LMFriedTextDefaultColorPrimitive;
-						break;
+			attributes = @{NSForegroundColorAttributeName:color};
+		}
+		
+		// Remove attributes when used for first time
+		for (NSString* attributeName in attributes) {
+			// If not already removed...
+			if (![removedAttribtues containsObject:attributeName]) {
+				// Remove it
+				if (_useTemporaryAttributesForSyntaxHighlight) {
+					[layoutManager removeTemporaryAttribute:attributeName forCharacterRange:fullRange];
 				}
-				attributes = @{NSForegroundColorAttributeName:color};
-			}
-			
-			// Remove attributes when used for first time
-			for (NSString* attributeName in attributes) {
-				// If not already removed...
-				if (![removedAttribtues containsObject:attributeName]) {
-					// Remove it
-					if (_useTemporaryAttributesForSyntaxHighlight) {
-						[layoutManager removeTemporaryAttribute:attributeName forCharacterRange:fullRange];
-					}
-					else {
-						[textStorage removeAttribute:attributeName range:fullRange];
-					}
-					// Mark this attribute as removed
-					[removedAttribtues addObject:attributeName];
+				else {
+					[textStorage removeAttribute:attributeName range:fullRange];
 				}
+				// Mark this attribute as removed
+				[removedAttribtues addObject:attributeName];
 			}
-			
-			// Apply attribtue
-			if (_useTemporaryAttributesForSyntaxHighlight) {
-				[layoutManager addTemporaryAttributes:attributes forCharacterRange:range];
-			}
-			else {
-				[textStorage addAttributes:attributes range:range];
-			}
-		}];
-	}
-	else {
+		}
+		
+		// Apply attribtue
 		if (_useTemporaryAttributesForSyntaxHighlight) {
-			[layoutManager removeTemporaryAttribute:NSFontAttributeName forCharacterRange:fullRange];
-			[layoutManager removeTemporaryAttribute:NSForegroundColorAttributeName forCharacterRange:fullRange];
+			[layoutManager addTemporaryAttributes:attributes forCharacterRange:range];
 		}
 		else {
-			[textStorage removeAttribute:NSFontAttributeName range:fullRange];
-			[textStorage removeAttribute:NSForegroundColorAttributeName range:fullRange];
+			[textStorage addAttributes:attributes range:range];
 		}
-	}
-	
-	// Fixes attributes
-	// Necessary to ensure non-roman characters are properly handled
-	[textStorage fixAttributesInRange:fullRange];
+	}];
 	
 	if (!_useTemporaryAttributesForSyntaxHighlight) {
 		[textStorage endEditing];
@@ -695,10 +643,8 @@ typedef enum {
 		}
 		else if (aSelector == @selector(insertNewline:)) {
 			id<LMCompletionOption>completionOption = [_completionView currentCompletionOption];
-			if (completionOption) {
-				[self insertCompletionOption:completionOption inRange:[self rangeForUserCompletion] isFinal:YES];
-				handled = YES;
-			}
+			[self insertCompletionOption:completionOption inRange:[self rangeForUserCompletion] isFinal:YES];
+			handled = YES;
 		}
 		else if (aSelector == @selector(moveToBeginningOfDocument:)) {
 			[_completionView selectFirstCompletion];
@@ -708,14 +654,6 @@ typedef enum {
 			[_completionView selectLastCompletion];
 			handled = YES;
 		}
-		else if (aSelector == @selector(insertTab:)) {
-			// Insert completion
-			id<LMCompletionOption>completionOption = [_completionView currentCompletionOption];
-			[self insertCompletionOption:completionOption inRange:[self rangeForUserCompletion] isFinal:YES];
-			// And go to next field
-			[super doCommandBySelector:aSelector];
-			handled = YES;
-		}
 	}
 	
 	if (!handled) {
@@ -723,31 +661,21 @@ typedef enum {
 	}
 }
 
-- (NSArray *)completionsForPartialWordRange:(NSRange)charRange indexOfSelectedItem:(NSInteger *)index
-{
-	if ([self.delegate respondsToSelector:@selector(textView:completions:forPartialWordRange:indexOfSelectedItem:)]) {
-		return [self.delegate textView:self completions:nil forPartialWordRange:charRange indexOfSelectedItem:index];
-	}
-	else {
-		return nil;
-	}
-}
-
 - (void)_handleCompletion:(LMCompletionEventType)completionEvent
 {
+	NSAssert(self.enableAutocompletion, @"Called _handleCompletion when enableAutocompletion is NO");
+	
 	if (_handlingCompletion) {
 		return;
 	}
 	_handlingCompletion = YES;
 	
 	NSRange rangeForUserCompletion = [self rangeForUserCompletion];
-	NSUInteger insertedStringLength = _insertedString ? [_insertedString length] : 0;
-#ifdef LMTextViewEnableCompletionTemporaryInsertion
 	NSRange rangeForUserTextChange = [self rangeForUserTextChange];
+	NSUInteger insertedStringLength = _insertedString ? [_insertedString length] : 0;
 	NSRange rangeOfInsertedText = NSMakeRange(rangeForUserTextChange.location - insertedStringLength, insertedStringLength);
-#endif
 	
-	LMTextViewCompletionLog(@"rangeForUserTextChange: %@", NSStringFromRange(rangeForUserTextChange));
+	NSLog(@"rangeForUserTextChange: %@", NSStringFromRange(rangeForUserTextChange));
 	
 	BOOL updateCompletions = NO;
 	
@@ -759,11 +687,9 @@ typedef enum {
 			completionEvent == LMCompletionEventSystemCompletion
 		 ) &&
 		_completionRange.location == NSNotFound) {
-		LMTextViewCompletionLog(@"START completion");
+		NSLog(@"START completion");
 		_completionRange = rangeForUserCompletion;
-#ifdef LMTextViewEnableCompletionTemporaryInsertion
 		_originalStringBeforeCompletion = [[[self textStorage] attributedSubstringFromRange:rangeForUserCompletion] mutableCopy];
-#endif
 		
 		updateCompletions = YES;
 	}
@@ -777,13 +703,11 @@ typedef enum {
 			 _completionRange.location != NSNotFound &&
 			 _completionRange.location >= rangeForUserCompletion.location &&
 			 _completionRange.location + _completionRange.length <= rangeForUserCompletion.location + rangeForUserCompletion.length) {
-		LMTextViewCompletionLog(@"CONTINUE completion");
+		NSLog(@"CONTINUE completion");
 		_completionRange = rangeForUserCompletion;
 		
-#ifdef LMTextViewEnableCompletionTemporaryInsertion
 		NSAttributedString* originalStringToAdd = [[self textStorage] attributedSubstringFromRange:rangeOfInsertedText];
-		[_originalStringBeforeCompletion insertAttributedString:originalStringToAdd atIndex:MIN([_originalStringBeforeCompletion length], rangeOfInsertedText.location)];
-#endif
+		[_originalStringBeforeCompletion appendAttributedString:originalStringToAdd];
 		
 		updateCompletions = YES;
 	}
@@ -791,9 +715,9 @@ typedef enum {
 	// END completion session
 	
 	else if (_completionRange.location != NSNotFound) {
-		LMTextViewCompletionLog(@"END completion");
+		NSLog(@"END completion");
 		
-		LMTextViewCompletionLog(@"Length: %ld Range: %@", [[self textStorage] length], NSStringFromRange(_completionRange));
+		NSLog(@"Length: %ld Range: %@", [[self textStorage] length], NSStringFromRange(_completionRange));
 		
 		// There may be characters left in the text storage and have been modified by completions
 		// We need to restore them as they were if there were no completion mechanism
@@ -803,21 +727,16 @@ typedef enum {
 			
 			// In the case characters have been deleted
 			if (_completionRange.length + _completionRange.location > [[self textStorage] length]) {
-#ifdef LMTextViewEnableCompletionTemporaryInsertion
 				[_originalStringBeforeCompletion deleteCharactersInRange:NSMakeRange([[self textStorage] length] - _completionRange.location, _completionRange.location + _completionRange.length - [[self textStorage] length])];
-#endif
 				_completionRange.length = [[self textStorage] length] - _completionRange.location;
 			}
 			
-			// For now we don't insert a completion temporarily in the text field to preview, so there is no point to change the text back (plus, it's buggy for now)
-#ifdef LMTextViewEnableCompletionTemporaryInsertion
 			NSAssert(_completionRange.length == [_originalStringBeforeCompletion length], @"Ending completion with a wrong length for original string");
 			
 			[[self textStorage] replaceCharactersInRange:_completionRange withAttributedString:_originalStringBeforeCompletion];
 			_completionRange.location = NSNotFound;
 			
 			[self didChangeText];
-#endif
 		}
 		else {
 			_completionRange.location = NSNotFound;
@@ -828,14 +747,12 @@ typedef enum {
 		_completionWindow = nil;
 		_completionView = nil;
 		
-#ifdef LMTextViewEnableCompletionTemporaryInsertion
 		_originalStringBeforeCompletion = nil;
-#endif
 	}
 	
 	// Nothing to do, completion is already ended
 	else {
-		LMTextViewCompletionLog(@"ALREADY ENDED");
+		NSLog(@"ALREADY ENDED");
 	}
 	
 	// On START or CONTINUE completions, set their values
@@ -869,7 +786,7 @@ typedef enum {
 				_completionWindow = [[NSWindow alloc] initWithContentRect:[self _frameForCompletionWindowRangeForUserCompletion:rangeForUserCompletion] styleMask:NSBorderlessWindowMask backing:NSBackingStoreBuffered defer:NO];
 				_completionWindow.backgroundColor = [NSColor clearColor];
 				[_completionWindow setOpaque:NO];
-				[_completionWindow setAnimationBehavior:NSWindowAnimationBehaviorNone];
+				[_completionWindow setAnimationBehavior:NSWindowAnimationBehaviorAlertPanel];
 				[self.window addChildWindow:_completionWindow ordered:NSWindowAbove];
 				
 				// Set the completion view in its window
@@ -892,11 +809,9 @@ typedef enum {
 	
 	
 	if (_completionRange.location != NSNotFound) {
-		LMTextViewCompletionLog(@"Completing Range: %@", NSStringFromRange(_completionRange));
-		LMTextViewCompletionLog(@"Completing String: %@", [[[self textStorage] attributedSubstringFromRange:_completionRange] string]);
-#ifdef LMTextViewEnableCompletionTemporaryInsertion
-		LMTextViewCompletionLog(@"String Before Completion: %@", [_originalStringBeforeCompletion string]);
-#endif
+		NSLog(@"Completing Range: %@", NSStringFromRange(_completionRange));
+		NSLog(@"Completing String: %@", [[[self textStorage] attributedSubstringFromRange:_completionRange] string]);
+		NSLog(@"String Before Completion: %@", [_originalStringBeforeCompletion string]);
 	}
 	
 	_handlingCompletion = NO;

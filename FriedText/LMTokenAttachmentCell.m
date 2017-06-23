@@ -11,7 +11,7 @@
 
 @interface LMTokenAttachmentCell ()
 
-@property (nonatomic) BOOL highlighted;
+@property (nonatomic) BOOL _highlighted;
 
 @end
 
@@ -76,7 +76,7 @@
 	NSRect frame = cellFrame;
 	CGFloat radius = ceilf([self cellSize].height / 2.f);
 	NSBezierPath* roundedRectanglePath = [NSBezierPath bezierPathWithRoundedRect: NSMakeRect(NSMinX(frame) + 0.5, NSMinY(frame) + 0.5, NSWidth(frame) - 1, NSHeight(frame) - 1) xRadius: radius yRadius: radius];
-	[(_highlighted ? [NSColor purpleColor] : bgColor) setFill];
+	[(__highlighted ? [NSColor purpleColor] : bgColor) setFill];
 	[roundedRectanglePath fill];
 	[borderColor setStroke];
 	[roundedRectanglePath setLineWidth: 1];

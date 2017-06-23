@@ -94,36 +94,14 @@
 	NSLog(@"Double Clicked");
 }
 
-//- (NSURL *)textView:(NSTextView *)textView URLForContentsOfTextAttachment:(NSTextAttachment *)textAttachment atIndex:(NSUInteger)charIndex
-//{
-//	return [NSURL fileURLWithPath:@"/Users/michamazaheri/Desktop/iOS Simulator Screen shot Apr 12, 2013 5.48.21 PM.png"];
-//}
-
-//- (NSArray *)textView:(NSTextView *)view writablePasteboardTypesForCell:(id<NSTextAttachmentCell>)cell atIndex:(NSUInteger)charIndex
-//{
-//	NSLog(@"1");
-//	return @[NSPasteboardTypePNG];
-//}
-//
-//- (BOOL)textView:(NSTextView *)view writeCell:(id<NSTextAttachmentCell>)cell atIndex:(NSUInteger)charIndex toPasteboard:(NSPasteboard *)pboard type:(NSString *)type
-//{
-//	NSLog(@"2:%@", type);
-//	[pboard clearContents];
-//	return [pboard setData:[NSData dataWithContentsOfFile:@"/Users/michamazaheri/Desktop/iOS Simulator Screen shot Apr 12, 2013 5.48.21 PM.png"] forType:NSPasteboardTypePNG];
-//}
-
 - (NSArray *)textView:(NSTextView *)textView completions:(NSArray *)words forPartialWordRange:(NSRange)charRange indexOfSelectedItem:(NSInteger *)index
 {
 	NSLog(@"Words: %@ CharRange: %@, Index: %ld", words, NSStringFromRange(charRange), *index);
 	*index = 2;
 	return @[@"Accept", @"Accept-Encoding", @"Accept-Language"];
-//	return @[
-//			@{@"word":@"Reina"},
-//			@{@"word":@"Micha"},
-//		  ];
 }
 
-- (BOOL)textView:(LMTextView *)textView mouseDownForTokenAtRange:(NSRange)range withBounds:(NSRect)bounds keyPath:(NSArray *)keyPath
+- (void)textView:(LMTextView *)textView mouseDownForTokenAtRange:(NSRange)range withBounds:(NSRect)bounds keyPath:(NSArray *)keyPath
 {
 	_tokenPopoverRange = range;
 	_tokenPopoverValue = [keyPath keyPathDescription];
@@ -135,8 +113,6 @@
 	else {
 		[self tokenize:nil];
 	}
-	
-	return YES;
 }
 
 @end

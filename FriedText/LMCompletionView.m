@@ -13,7 +13,7 @@
 
 #import "NSView+CocoaExtensions.h"
 
-@interface LMCompletionView () {
+@interface LMCompletionView () <NSTableViewDataSource, NSTableViewDelegate> {
 	id<LMCompletionOption> _lastCompletionOption;
 }
 
@@ -57,6 +57,8 @@
 
 - (void)drawRect:(NSRect)dirtyRect
 {
+	[super drawRect:dirtyRect];
+	
 	CGContextRef context = [[NSGraphicsContext currentContext] graphicsPort];
 	
 	//// Color Declarations

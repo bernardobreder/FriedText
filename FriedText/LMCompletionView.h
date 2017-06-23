@@ -20,7 +20,7 @@
 
 @class LMCompletionTableView;
 
-@interface LMCompletionView : NSView  <NSTableViewDataSource, NSTableViewDelegate>
+@interface LMCompletionView : NSView
 
 @property (strong, nonatomic) LMCompletionTableView* tableView;
 
@@ -29,8 +29,8 @@
 
 @property (strong, nonatomic) id <LMCompletionViewDelegate> delegate;
 
-@property (nonatomic) CGFloat textFieldHeight;
-@property (nonatomic) CGSize completionInset;
+@property (nonatomic, readonly) CGFloat textFieldHeight;
+@property (nonatomic, readonly) CGSize completionInset;
 
 - (id<LMCompletionOption>)currentCompletionOption;
 

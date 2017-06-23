@@ -12,14 +12,13 @@
 
 @class LMTextView, LMTextField, LMCompletionView;
 
-extern NSView* _LMTextViewDrawingInControlView;
 
 #pragma mark - LMTextViewDelegate
 
 @protocol LMTextViewDelegate <NSTextViewDelegate>
 
 @optional
-- (BOOL)textView:(LMTextView*)textView mouseDownForTokenAtRange:(NSRange)range withBounds:(NSRect)bounds keyPath:(NSArray*)keyPath;
+- (void)textView:(LMTextView*)textView mouseDownForTokenAtRange:(NSRange)range withBounds:(NSRect)bounds keyPath:(NSArray*)keyPath;
 - (void)mouseDownOutsideTokenInTextView:(LMTextView*)textView;
 - (id<NSTextAttachmentCell>)textView:(LMTextView*)textView textAttachmentCellForTextAttachment:(NSTextAttachment*)textAttachment;
 - (NSDictionary*)textView:(LMTextView*)textView attributesForTextWithParser:(id<LMTextParser>) parser tokenMask:(NSUInteger)parserTokenMask atRange:(NSRange)range;
@@ -47,7 +46,6 @@ extern NSView* _LMTextViewDrawingInControlView;
 @property (strong, nonatomic) id <LMTextParser> parser;
 
 @property (nonatomic) BOOL changeCursorOnTokens;
-@property (nonatomic) BOOL underlineTokensOnMouseOver;
 
 @property (nonatomic) BOOL optimizeHighlightingOnScrolling;
 @property (nonatomic) BOOL optimizeHighlightingOnEditing;
@@ -55,9 +53,6 @@ extern NSView* _LMTextViewDrawingInControlView;
 @property (nonatomic) BOOL useTemporaryAttributesForSyntaxHighlight;
 
 @property (nonatomic) BOOL enableAutocompletion;
-
-@property (nonatomic, readonly) NSRange completionRange;
-@property (strong, nonatomic, readonly) NSWindow* completionWindow;
 
 + (NSArray*)defaultTextAttachmentCellClasses;
 
@@ -70,7 +65,5 @@ extern NSView* _LMTextViewDrawingInControlView;
 - (BOOL)setString:(NSString *)string isUserInitiated:(BOOL)isUserInitiated;
 
 - (NSDictionary*)textAttributes;
-
-@property (strong, nonatomic, readwrite) NSDictionary* enforceTextAttributes;
 
 @end
